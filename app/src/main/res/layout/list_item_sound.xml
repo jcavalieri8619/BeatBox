@@ -5,15 +5,37 @@
 
     <data>
 
+        <variable
+            name="sound"
+            type="com.bignerdranch.android.beatbox.model.Sound" />
+
+        <variable
+            name="onSoundClick"
+            type="com.bignerdranch.android.beatbox.ui.SoundClickCallback" />
+
 
 
     </data>
-    <Button
+
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="120dp"
-        tools:text="Sound Name">
+        android:layout_height="wrap_content"
+        android:layout_margin="8dp">
+    <Button
+        style="@style/BeatBoxButton.Strong"
+
+
+        android:background="@drawable/button_statelist"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:layout_gravity="center"
+
+        tools:text="Sound Name"
+        android:onClick="@{()->onSoundClick.onClick(sound)}"
+        android:text="@{sound.getName()}">
 
 
 
     </Button>
+    </FrameLayout>
 </layout>
