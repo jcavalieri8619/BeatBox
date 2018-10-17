@@ -1,10 +1,13 @@
-package com.bignerdranch.android.beatbox;
+package com.bignerdranch.android.beatbox.data;
 
-public class Sound {
+import com.bignerdranch.android.beatbox.model.Sound;
+
+public class SoundData implements Sound{
     private String mAssetPath;
     private String mName;
+    private Integer mSoundID;
 
-    public Sound(final String assetPath) {
+    public SoundData(final String assetPath) {
         mAssetPath = assetPath;
 
         String[] components = assetPath.split("/");
@@ -18,7 +21,18 @@ public class Sound {
         return mAssetPath;
     }
 
+    @Override
     public String getName() {
         return mName;
+    }
+
+    @Override
+    public Integer getID() {
+        return mSoundID;
+    }
+
+    @Override
+    public void setID(int ID) {
+        mSoundID = ID;
     }
 }
