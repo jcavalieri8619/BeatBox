@@ -1,25 +1,34 @@
-package com.bignerdranch.android.beatbox;
+package com.bignerdranch.android.beatbox.ui;
 
 
+import android.arch.lifecycle.Observer;
+import android.arch.lifecycle.ViewModelProvider;
+import android.arch.lifecycle.ViewModelProviders;
 import android.databinding.DataBindingUtil;
-import android.databinding.ViewDataBinding;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.test.mock.MockApplication;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.ListView;
+import android.widget.SeekBar;
 
+import com.bignerdranch.android.beatbox.BasicApp;
+import com.bignerdranch.android.beatbox.Injection;
+import com.bignerdranch.android.beatbox.R;
+import com.bignerdranch.android.beatbox.model.Sound;
+import com.bignerdranch.android.beatbox.viewmodel.SoundViewModel;
 import com.bignerdranch.android.beatbox.databinding.FragmentBeatBoxBinding;
 import com.bignerdranch.android.beatbox.databinding.ListItemSoundBinding;
+import com.bignerdranch.android.beatbox.data.SoundData;
 
-import java.security.PrivateKey;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.zip.Inflater;
+
 
 
 /**
@@ -30,6 +39,7 @@ import java.util.zip.Inflater;
 public class BeatBoxFragment extends Fragment {
     // TODO: Rename parameter arguments, choose names that match
     // the fragment initialization parameters, e.g. ARG_ITEM_NUMBER
+    private static final String TAG = "BeatBoxFragment";
     private static final String ARG_PARAM1 = "param1";
     private static final String ARG_PARAM2 = "param2";
 
@@ -37,7 +47,15 @@ public class BeatBoxFragment extends Fragment {
     private String mParam1;
     private String mParam2;
     private SoundAdapter mAdapter;
-    private BeatBox mBeatBox;
+    private SoundViewModel mViewModel;
+    private final Observer<List<SoundData>> mSoundListObserver=new Observer<List<SoundData>>() {
+        @Override
+        public void onChanged(@Nullable final List<SoundData> soundDataItems) {
+            mAdapter.submitItems(soundDataItems);
+
+        }
+    };
+    private FragmentBeatBoxBinding mFragmentBinding;
 
 
     public BeatBoxFragment() {
@@ -75,34 +93,131 @@ public class BeatBoxFragment extends Fragment {
     }
 
     @Override
-    public View onCreateView(LayoutInflater inflater, ViewGroup container,
-                             Bundle savedInstanceState) {
+    public void onDestroy() {
+        super.onDestroy();
 
-        FragmentBeatBoxBinding binding = DataBindingUtil.inflate(inflater,
-                R.layout.fragment_beat_box, container, false);
+        //TODO this may not belong here since this fragment will be destroyed on rotation
+        // but the singleton BeatBox lives in Application and it will not; so after roation,
+        //there will be no way to retrieve the soundPool again; perhaps but this in
+        // application ondestroy
+//        ((BasicApp) getActivity().getApplication()).getBeatBox().releaseSoundPool();
+
+    }
+
+    @Override
+    public void onActivityCreated(@Nullable final Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+
+        // get viewModel in onActivityCreated because this is only called when a
+        // fragment is created; not restarted. so getting it here instead of oncreateView
+        // prevents wasting time by getting a viewModel that we already have a valid reference to
+
+        final ViewModelProvider.Factory factory = Injection.provideViewModelFactory(getActivity());
+        mViewModel = ViewModelProviders.of(this,factory).get(SoundViewModel.class);
 
 
-        binding.recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 3));
-
-        mBeatBox = new BeatBox(getContext());
-
-        binding.recyclerView.setAdapter(new SoundAdapter(mBeatBox.getSounds()));
+        subscribeToModel();
 
 
-
-        return binding.getRoot();
 
 
 
     }
 
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+
+        // either unobserve here or do a re-observe in subscribeToModel by unobserving then observing
+//        mViewModel.getSoundList().removeObserver(mSoundListObserver);
+
+    }
+
+    @Override
+    public View onCreateView(LayoutInflater inflater, ViewGroup container,
+                             Bundle savedInstanceState) {
+
+        mFragmentBinding = DataBindingUtil.inflate(inflater,
+                R.layout.fragment_beat_box, container, false);
+
+
+        mFragmentBinding.setViewModel(mViewModel);
+
+
+        setupCallbacks();
+
+
+
+
+        setupRecyclerView();
+
+
+
+        return mFragmentBinding.getRoot();
+
+
+
+    }
+
+    private void setupRecyclerView() {
+        mAdapter = new SoundAdapter();
+
+        mFragmentBinding.recyclerView.setLayoutManager(new GridLayoutManager(getContext(), 3));
+
+
+        mFragmentBinding.recyclerView.setAdapter(mAdapter);
+    }
+
+    private void setupCallbacks() {
+        mFragmentBinding.seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(final SeekBar seekBar, final int progress, final boolean fromUser) {
+                Log.d(TAG, "onProgressChanged: JPC new value " + progress);
+                mViewModel.setSeekValue(progress);
+
+            }
+
+            @Override
+            public void onStartTrackingTouch(final SeekBar seekBar) {
+
+            }
+
+            @Override
+            public void onStopTrackingTouch(final SeekBar seekBar) {
+
+            }
+        });
+    }
+
+    private void subscribeToModel() {
+
+        // a RE-observe
+        mViewModel.getSoundList().removeObserver(mSoundListObserver);
+        mViewModel.getSoundList().observe(this, mSoundListObserver);
+    }
+
+    private SoundClickCallback mSoundClickCallback = new SoundClickCallback() {
+        @Override
+        public void onClick(final Sound sound) {
+
+
+            ((BasicApp) getActivity().getApplication()).getBeatBox().playSound(sound, (float) mViewModel.getSeekValue());
+
+        }
+    };
 
     private class SoundAdapter extends RecyclerView.Adapter<SoundHolder> {
 
-        private List<Sound> mSounds;
+        private List<? extends Sound> mSounds;
 
-        public SoundAdapter(final List<Sound> sounds) {
-            mSounds = sounds;
+        public SoundAdapter() {
+
+        }
+
+        public void submitItems(List<? extends Sound> items) {
+            mSounds = items;
+            notifyItemRangeChanged(0, items.size());
+
         }
 
         /**
@@ -128,13 +243,16 @@ public class BeatBoxFragment extends Fragment {
         @NonNull
         @Override
         public SoundHolder onCreateViewHolder(@NonNull final ViewGroup parent, final int viewType) {
-            LayoutInflater inflater = LayoutInflater.from(getContext());
 
-            ListItemSoundBinding binding = DataBindingUtil.inflate(inflater,
+
+            ListItemSoundBinding mListItemSoundBinding = DataBindingUtil.inflate(LayoutInflater.from(parent.getContext()),
                     R.layout.list_item_sound, parent, false);
 
-            return new SoundHolder(binding);
+            return new SoundHolder(mListItemSoundBinding);
         }
+
+
+
 
         /**
          * Called by RecyclerView to display the data at the specified position. This method should
@@ -158,6 +276,8 @@ public class BeatBoxFragment extends Fragment {
          */
         @Override
         public void onBindViewHolder(@NonNull final SoundHolder holder, final int position) {
+            holder.bind(mSounds.get(position));
+            holder.mBinding.executePendingBindings();
 
         }
 
@@ -168,7 +288,7 @@ public class BeatBoxFragment extends Fragment {
          */
         @Override
         public int getItemCount() {
-            return mSounds.size();
+            return mSounds==null? 0:mSounds.size();
         }
 
     }
@@ -176,12 +296,24 @@ public class BeatBoxFragment extends Fragment {
 
     private class SoundHolder extends RecyclerView.ViewHolder {
 
-        private ListItemSoundBinding mBinding;
+        final ListItemSoundBinding mBinding;
 
         public SoundHolder(final ListItemSoundBinding binding) {
             super(binding.getRoot());
 
             mBinding = binding;
+
+
+        }
+
+
+        public void bind(Sound sound) {
+
+
+            mBinding.setSound(sound);
+            mBinding.setOnSoundClick(mSoundClickCallback);
+
+
         }
 
 
